@@ -1,4 +1,5 @@
-import {Request, response, Response} from "express";
+import {Request, response, Response} from 'express';
+import {Socket}                      from 'socket.io';
 
 export const NJ_PROVIDER_CONFIG = Symbol('nj-provider-config');
 export const NJ_REMOTE_METHODS = Symbol('nj-remote-methods');
@@ -20,16 +21,16 @@ export enum RemoteMethodType {
 
 export interface ProviderOptions {
     prefix?: string,
-    methodName?: string,
+    namespace?: string,
 }
 
 export function Provider(type: ProviderType, options?: ProviderOptions) {
     return function (constructor: any) {
         Reflect.defineMetadata(NJ_PROVIDER_CONFIG, {
             type,
-            options
+            options,
         }, constructor.prototype);
-    }
+    };
 }
 
 export function Get(prefix: string = '/') {
@@ -38,12 +39,12 @@ export function Get(prefix: string = '/') {
         Reflect.defineMetadata(NJ_REMOTE_METHODS, [
             ...prev,
             {
-                type: RemoteMethodType.GET,
+                type        : RemoteMethodType.GET,
                 originalName: name,
                 prefix,
-            }
+            },
         ], constructor);
-    }
+    };
 }
 
 export function Post(prefix: string = '/') {
@@ -52,12 +53,12 @@ export function Post(prefix: string = '/') {
         Reflect.defineMetadata(NJ_REMOTE_METHODS, [
             ...prev,
             {
-                type: RemoteMethodType.POST,
+                type        : RemoteMethodType.POST,
                 originalName: name,
                 prefix,
-            }
+            },
         ], constructor);
-    }
+    };
 }
 
 export function Message(methodName?: string) {
@@ -66,12 +67,12 @@ export function Message(methodName?: string) {
         Reflect.defineMetadata(NJ_REMOTE_METHODS, [
             ...prev,
             {
-                type: RemoteMethodType.MESSAGE,
+                type        : RemoteMethodType.MESSAGE,
                 originalName: name,
-                remoteName: methodName,
-            }
+                remoteName  : methodName,
+            },
         ], constructor);
-    }
+    };
 }
 
 export function RemoteCall(methodName?: string) {
@@ -80,12 +81,12 @@ export function RemoteCall(methodName?: string) {
         Reflect.defineMetadata(NJ_REMOTE_METHODS, [
             ...prev,
             {
-                type: RemoteMethodType.REMOTE_CALL,
+                type        : RemoteMethodType.REMOTE_CALL,
                 originalName: name,
-                remoteName: methodName,
-            }
+                remoteName  : methodName,
+            },
         ], constructor);
-    }
+    };
 }
 
 export function Init(constructor: any, name: string, descriptor: PropertyDescriptor) {
@@ -102,11 +103,11 @@ export function injectRestParamDecoratorFactory(resolver: (request: Request, res
                     index,
                     resolver: (request: Request, response: Response) => {
                         return resolver(request, response, ...args);
-                    }
-                }
+                    },
+                },
             ], constructor, name);
-        }
-    }
+        };
+    };
 }
 
 export const Body = injectRestParamDecoratorFactory((req, res) => req.body);
@@ -122,8 +123,43 @@ export function injectRequestRestHandlerFactory(handler: (request: Request, resp
                 ...prev,
                 (request: Request, response: Response, next: Function) => {
                     handler(request, response, next, ...args);
-                }
+                },
             ], constructor, name);
-        }
-    }
+        };
+    };
+}
+
+
+export function injectWsParamDecoratorFactory(handler: (socket: Socket, data: any[], ...args: any) => any) {
+    return function (...args) {
+        return function (constructor: any, name: string, index: number) {
+            const prev = Reflect.getMetadata(NJ_INJECTED_PARAMS, constructor, name) || [];
+            Reflect.defineMetadata(NJ_INJECTED_PARAMS, [
+                ...prev,
+                {
+                    index,
+                    resolver: (data: any, socket: Socket) => {
+                        return handler(socket, data, ...args);
+                    },
+                },
+            ], constructor, name);
+        };
+    };
+}
+
+export const Client = injectWsParamDecoratorFactory((socket) => socket);
+export const Handshake = injectWsParamDecoratorFactory((socket) => socket.handshake);
+
+export function injectWsMiddlewareFactory(handler: (data: any[], socket: Socket, next: { continue: (newData: any[]) => void, break: () => void }, ...args: any) => void) {
+    return function (...args) {
+        return function (constructor: any, name: string, descriptor: PropertyDescriptor) {
+            const prev = Reflect.getMetadata(NJ_INJECTED_HANDLERS, constructor, name) || [];
+            Reflect.defineMetadata(NJ_INJECTED_HANDLERS, [
+                ...prev,
+                (data: any[], socket: Socket, next: { continue: (newData: any[]) => void, break: () => void }) => {
+                    handler(data, socket, next, ...args);
+                },
+            ], constructor, name);
+        };
+    };
 }
