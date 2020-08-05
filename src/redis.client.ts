@@ -11,9 +11,7 @@ export class RedisClient extends EventEmitter {
     private readonly serviceName: string;
     private readonly ioClient: TRedisClient;
     private readonly busClient: TRedisClient;
-    private id: string;
-
-    private connectedServices: Object = {};
+    private readonly id: string;
 
     constructor(options: { host: string, port: number, serviceName: string }) {
         super();
@@ -72,6 +70,7 @@ export class RedisClient extends EventEmitter {
 
     private processSelfBus(data: string) {
         data = JSON.parse(data);
+        return data;
     }
 
     private async updateConnectedServices() {
