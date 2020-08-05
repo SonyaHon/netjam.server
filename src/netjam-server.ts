@@ -213,7 +213,7 @@ export class NetjamServer extends EventEmitter {
         for (let provider of providers) {
             this.providers[provider.constructor.name] = provider;
             provider._set_natjam(this);
-            const {type} = Reflect.getMetadata(NJ_PROVIDER_CONFIG, provider);
+            const {type} = Reflect.getMetadata(NJ_PROVIDER_CONFIG, provider) || {};
             switch (type) {
                 case ProviderType.REST:
                     this.prepareForRest(provider);

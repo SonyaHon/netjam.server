@@ -9,14 +9,17 @@ export const NJ_INJECTED_HANDLERS = Symbol('nj-injected-handlers');
 
 export enum ProviderType {
     REST,
-    WS
+    WS,
+    REDIS,
 }
 
 export enum RemoteMethodType {
     GET,
     POST,
     MESSAGE,
-    REMOTE_CALL
+    REMOTE_CALL,
+    REDIS_MESSAGE,
+    REDIS_CALL
 }
 
 export interface ProviderOptions {
