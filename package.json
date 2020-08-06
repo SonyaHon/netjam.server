@@ -19,8 +19,7 @@
         "reflect-metadata": "^0.1.13",
         "multer":           "^1.4.2",
         "body-parser":      "^1.19.0",
-        "redis":            "^3.0.2",
-        "moment":           ""
+        "redis":            "^3.0.2"
     },
     "devDependencies": {
         "typescript":              "^3.9.7",
@@ -35,8 +34,7 @@
         "@types/socket.io-client": "^1.4.33",
         "@types/body-parser":      "^1.19.0",
         "@types/multer":           "^1.4.3",
-        "@types/redis":            "^2.8.25",
-        "@types/moment":           ""
+        "@types/redis":            "^2.8.25"
     },
     "author":          "Sonyahon <volkov030@gmail.com>",
     "license":         "MIT"
