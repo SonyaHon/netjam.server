@@ -6,6 +6,7 @@ export const NJ_REMOTE_METHODS = Symbol('nj-remote-methods');
 export const NJ_INIT_METHOD = Symbol('nj-init-method');
 export const NJ_INJECTED_PARAMS = Symbol('nj-injected-params');
 export const NJ_INJECTED_HANDLERS = Symbol('nj-injected-handlers');
+export const NJ_AFTER_INIT_METHOD = Symbol('nj-after-init-method');
 
 export enum ProviderType {
     REST,
@@ -94,6 +95,10 @@ export function RemoteCall(methodName?: string) {
 
 export function Init(constructor: any, name: string, descriptor: PropertyDescriptor) {
     Reflect.defineMetadata(NJ_INIT_METHOD, name, constructor);
+}
+
+export function AfterStartInit(constructor: any, name: string, descriptor: PropertyDescriptor) {
+    Reflect.defineMetadata(NJ_AFTER_INIT_METHOD, name, constructor);
 }
 
 export function injectRestParamDecoratorFactory(resolver: (request: Request, response: Response, ...args: any) => any) {

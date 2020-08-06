@@ -1,17 +1,20 @@
 import {EventEmitter}                       from 'events';
 import redis, {RedisClient as TRedisClient} from 'redis';
 import {v1 as uuid}                         from 'uuid';
-import {RedisBusEvents, REventCodes}        from './redis_events/bus-globals';
+import {RedisBusEvents, REventCodes}        from './redis-events/bus-globals';
 
 export const NJ_RKEY_BUS = 'nj_bus';
 export const NJ_RKEY_SERVICE = 'nj_service';
 export const NJ_RKEY_DELIMETR = '::';
 
 export class RedisClient extends EventEmitter {
-    private readonly serviceName: string;
-    private readonly ioClient: TRedisClient;
-    private readonly busClient: TRedisClient;
-    private readonly id: string;
+    readonly serviceName: string;
+    readonly ioClient: TRedisClient;
+    readonly busClient: TRedisClient;
+    readonly id: string;
+
+    private startUpTime: number;
+    private healthMiddlewares: (() => { [key: string]: string | number })[] = [];
 
     constructor(options: { host: string, port: number, serviceName: string }) {
         super();
@@ -29,15 +32,19 @@ export class RedisClient extends EventEmitter {
 
     pingLoop() {
         setInterval(async () => {
+            console.log(this.healthMiddlewares.map(mw => mw()));
             await this.ioClient.set(`${NJ_RKEY_SERVICE}${NJ_RKEY_DELIMETR}${this.serviceName}${NJ_RKEY_DELIMETR}${this.id}`, JSON.stringify({
-                healthStatus: 'good',
+                uptime: Date.now() - this.startUpTime,
+                ...(this.healthMiddlewares.map(mw => mw()).reduce((res, el) => ({...res, ...el}), {})),
             }), 'PX', 15000);
         }, 10000);
     }
 
     async init() {
+        this.startUpTime = Date.now();
         await this.ioClient.set(`${NJ_RKEY_SERVICE}${NJ_RKEY_DELIMETR}${this.serviceName}${NJ_RKEY_DELIMETR}${this.id}`, JSON.stringify({
-            healthStatus: 'good',
+            uptime: Date.now() - this.startUpTime,
+            ...this.healthMiddlewares.map(mw => mw()),
         }), 'PX', 15000);
         this.pingLoop();
 
@@ -51,7 +58,10 @@ export class RedisClient extends EventEmitter {
         });
 
         this.ioClient.publish(NJ_RKEY_BUS, RedisBusEvents.Connect(uuid()));
-        await this.updateConnectedServices();
+    }
+
+    useMetricMiddleware(middleware: () => { [key: string]: string | number }) {
+        this.healthMiddlewares.push(middleware);
     }
 
     private processGlobalBus(data: string) {
@@ -60,7 +70,10 @@ export class RedisClient extends EventEmitter {
             switch (parsedData.event) {
                 case REventCodes.SERVICE_CONNECTED:
                 case REventCodes.SERVICE_DISCONNECTED:
-                    this.updateConnectedServices();
+                    // maybe add something to it
+                    // default - no action for not to make services binded together
+                    // basically a service do not need to now if another one even exists
+                    // this one will know somthing only if some call will be bad
                     break;
             }
         } catch (e) {
@@ -71,12 +84,5 @@ export class RedisClient extends EventEmitter {
     private processSelfBus(data: string) {
         data = JSON.parse(data);
         return data;
-    }
-
-    private async updateConnectedServices() {
-        const keys = await this.ioClient.scan('0', 'MATCH', `${NJ_RKEY_SERVICE}${NJ_RKEY_DELIMETR}*`, 'COUNT', '100', (err, data) => {
-            console.log(data);
-        });
-        console.log(keys);
     }
 }

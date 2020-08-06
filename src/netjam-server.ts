@@ -4,6 +4,7 @@ import Express, {Application}                       from 'express';
 import Io, {Server as IoServer, Socket as IoSocket} from 'socket.io';
 import {ProviderBase}                               from './provider-base';
 import {
+    NJ_AFTER_INIT_METHOD,
     NJ_INIT_METHOD, NJ_INJECTED_HANDLERS,
     NJ_INJECTED_PARAMS,
     NJ_PROVIDER_CONFIG,
@@ -99,8 +100,8 @@ export class NetjamServer extends EventEmitter {
             }
 
             const injectedHandlers = Reflect.getMetadata(NJ_INJECTED_HANDLERS, provider, originalName) || [];
-            this.express[httpReq](this.concatRestPrefixes(this.globalPrefix || '', options.prefix || '/', prefix ||
-                                                                                                          '/'), [
+            this.express[httpReq](this.concatRestPrefixes(this.globalPrefix || '', options?.prefix || '/', prefix ||
+                                                                                                           '/'), [
                 ...injectedHandlers, async (req, res) => {
                     const injectedParams = Reflect.getMetadata(NJ_INJECTED_PARAMS, provider, originalName);
                     let args = [];
@@ -213,7 +214,8 @@ export class NetjamServer extends EventEmitter {
         for (let provider of providers) {
             this.providers[provider.constructor.name] = provider;
             provider._set_natjam(this);
-            const {type} = Reflect.getMetadata(NJ_PROVIDER_CONFIG, provider) || {};
+            const rs = Reflect.getMetadata(NJ_PROVIDER_CONFIG, provider) || {};
+            const {type} = rs;
             switch (type) {
                 case ProviderType.REST:
                     this.prepareForRest(provider);
@@ -248,6 +250,7 @@ export class NetjamServer extends EventEmitter {
             });
             await this.redisClient.init();
         }
+        await this.processAfterInit();
     }
 
     getProvider<T>(providerName: string): T | null {
@@ -267,5 +270,19 @@ export class NetjamServer extends EventEmitter {
                 ret(res);
             });
         });
+    }
+
+    getRedisClient() {
+        return this.redisClient;
+    }
+
+    private async processAfterInit() {
+        for (let providersKey in this.providers) {
+            const provider = this.providers[providersKey];
+            const initMethodName = Reflect.getMetadata(NJ_AFTER_INIT_METHOD, provider);
+            if (initMethodName) {
+                await provider[initMethodName]();
+            }
+        }
     }
 }
