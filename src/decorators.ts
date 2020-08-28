@@ -113,6 +113,24 @@ export function RemoteCall(methodName?: string) {
   };
 }
 
+export function RedisMessage(eventName?: string) {
+  return function (constructor: any, name: string, descriptor: PropertyDescriptor) {
+    const prev = Reflect.getMetadata(NJ_REMOTE_METHODS, constructor) || [];
+    Reflect.defineMetadata(
+      NJ_REMOTE_METHODS,
+      [
+        ...prev,
+        {
+          type: RemoteMethodType.REDIS_MESSAGE,
+          originalName: name,
+          remoteName: eventName,
+        },
+      ],
+      constructor
+    );
+  };
+}
+
 export function Init(constructor: any, name: string, descriptor: PropertyDescriptor) {
   Reflect.defineMetadata(NJ_INIT_METHOD, name, constructor);
 }

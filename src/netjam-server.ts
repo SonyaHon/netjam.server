@@ -16,6 +16,7 @@ import {
 import bodyParser from 'body-parser';
 import { RedisClient } from './redis.client';
 import _ from 'lodash';
+import { RCLIENT_EVENTS } from './redis-events/redist-client-events';
 
 export interface NetjamServerConfig {
   server: {
@@ -45,6 +46,17 @@ export class NetjamServer extends EventEmitter {
   } = {
     message: {},
     remoteCall: {},
+  };
+  private redisEventsTree: {
+    message: {
+      [event: string]: Function;
+    };
+    call: {
+      [event: string]: Function;
+    };
+  } = {
+    message: {},
+    call: {},
   };
   private globalPrefix: null | string = null;
   private providers: Object = {};
@@ -120,6 +132,33 @@ export class NetjamServer extends EventEmitter {
           },
         ]
       );
+    }
+  }
+
+  private prepareForRedis(provider: ProviderBase) {
+    const { options } = Reflect.getMetadata(NJ_PROVIDER_CONFIG, provider);
+    const remoteMethods: { type: RemoteMethodType; originalName: string; remoteName?: string }[] =
+      Reflect.getMetadata(NJ_REMOTE_METHODS, provider) || [];
+
+    for (let method of remoteMethods) {
+      const { type, originalName, remoteName } = method;
+      const eventName = remoteName ? remoteName : originalName;
+      const namespace = options.namespace || 'default';
+      const handlerEvent = `${namespace}::${eventName}`;
+
+      switch (type) {
+        case RemoteMethodType.REDIS_MESSAGE:
+          if (this.redisEventsTree.message[handlerEvent]) {
+            throw new Error(
+              `Cannot bind more than one handler for the event: Provider namespace: \"${namespace}\", method: ${eventName}`
+            );
+          }
+
+          this.redisEventsTree.message[handlerEvent] = async (data: any) => {
+            await provider[originalName](data);
+          };
+          break;
+      }
     }
   }
 
@@ -240,6 +279,9 @@ export class NetjamServer extends EventEmitter {
         case ProviderType.WS:
           this.prepareForWs(provider);
           break;
+        case ProviderType.REDIS:
+          this.prepareForRedis(provider);
+          break;
       }
       const initMethod = Reflect.getMetadata(NJ_INIT_METHOD, provider);
       if (initMethod) {
@@ -266,6 +308,10 @@ export class NetjamServer extends EventEmitter {
         serviceName: this.config.microservice.serviceName,
       });
       await this.redisClient.init();
+      this.redisClient.on(RCLIENT_EVENTS.MESSAGE, (data: { eventName: string; data: any }) => {
+        console.log('ON handler', data, this.redisEventsTree.message);
+        this.redisEventsTree.message[data.eventName](data.data);
+      });
     }
     await this.processAfterInit();
   }

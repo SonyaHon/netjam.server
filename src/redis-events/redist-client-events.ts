@@ -1,0 +1,4 @@
+export const RCLIENT_EVENTS = {
+  MESSAGE: 'MESSAGE_EVENT',
+  CALL: 'CALL_EVENT',
+};

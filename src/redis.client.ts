@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import redis, { RedisClient as TRedisClient } from 'redis';
 import { v1 as uuid } from 'uuid';
 import { RedisBusEvents, REventCodes } from './redis-events/bus-globals';
+import { RCLIENT_EVENTS } from './redis-events/redist-client-events';
 
 export const NJ_RKEY_BUS = 'nj_bus';
 export const NJ_RKEY_SERVICE = 'nj_service';
@@ -74,16 +75,93 @@ export class RedisClient extends EventEmitter {
     this.healthMiddlewares.push(middleware);
   }
 
-  private processGlobalBus(data: string) {
+  private async checkIfIdIsBeingProcseed(id: string) {
+    return new Promise((resolve, reject) => {
+      this.ioClient.get(id, (err, reply) => {
+        console.log('Ch2', err, reply);
+
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(!!reply);
+      });
+    });
+  }
+
+  private async claimId(id: string) {
+    return new Promise((resolve, reject) => {
+      this.ioClient.set(id, this.id, (err, reply) => {
+        if (err) {
+          reject(err);
+
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  private async unclaimId(id: string) {
+    await new Promise((resolve, reject) => {
+      this.ioClient.del(id, (err, reply) => {
+        console.log('Ch4', err, reply);
+
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  private async processGlobalBus(data: string) {
     try {
-      const parsedData: { event: REventCodes } = JSON.parse(data);
-      switch (parsedData.event) {
+      const parsedEvent: { id: string; data: { event: REventCodes } } = JSON.parse(data);
+      switch (parsedEvent.data.event) {
         case REventCodes.SERVICE_CONNECTED:
         case REventCodes.SERVICE_DISCONNECTED:
           // maybe add something to it
           // default - no action for not to make services binded together
           // basically a service do not need to now if another one even exists
           // this one will know somthing only if some call will be bad
+          break;
+        case REventCodes.MESSAGE:
+          const dt: {
+            id: string;
+            data: {
+              event: REventCodes;
+              serviceName: string;
+              eventName: string;
+              data: any;
+            };
+          } = JSON.parse(data);
+          // check if this message is addressed to self
+          console.log('Ch1', this.serviceName, dt.data.serviceName);
+          if (this.serviceName !== dt.data.serviceName) return;
+          // check if this message in not being processed by another service
+          if (await this.checkIfIdIsBeingProcseed(dt.id)) return;
+          // claim this message to self
+          await this.claimId(dt.id);
+          // pass this to the right provider
+
+          this.emit(RCLIENT_EVENTS.MESSAGE, {
+            eventName: dt.data.eventName,
+            data: dt.data.data,
+          });
+          // remove message from redis
+          await this.unclaimId(dt.id);
+          break;
+        case REventCodes.CALL:
+          // check if this call is not being processed by another service
+          // claim this call to self
+          // pass this call to the right provider
+          // send results back
+          break;
+        case REventCodes.CALL_RETURN:
+          // fire an event that the call has been resolved
+          // remove call from redis
           break;
       }
     } catch (e) {}
